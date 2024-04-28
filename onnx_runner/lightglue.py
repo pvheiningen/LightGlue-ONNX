@@ -12,7 +12,7 @@ class LightGlueRunner:
         self.extractor = (
             ort.InferenceSession(
                 extractor_path,
-                providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
+                providers=providers,
             )
             if extractor_path is not None
             else None
