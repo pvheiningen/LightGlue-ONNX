@@ -1,4 +1,3 @@
-from .disk import DISK
 from .lightglue import LightGlue
+from .pipeline import Pipeline
 from .superpoint import SuperPoint
-from .utils import match_pair
