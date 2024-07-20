@@ -106,6 +106,7 @@ def export(
     )
     onnx.checker.check_model(output)
     onnx.save_model(SymbolicShapeInference.infer_shapes(onnx.load_model(output), auto_merge=True), output)  # type: ignore
+    typer.echo(f"Successfully exported model to {output}")
     if fp16:
         typer.echo(
             "Converting to FP16. Warning: This FP16 model should NOT be used for TensorRT. TRT provides its own fp16 option."
