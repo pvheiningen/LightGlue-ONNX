@@ -3,7 +3,6 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ..config import Extractor
 from ..ops import multi_head_attention_dispatch
 
 torch.backends.cudnn.deterministic = True
@@ -162,12 +161,10 @@ def filter_matches(scores: torch.Tensor, threshold: float):
 
 
 class LightGlue(nn.Module):
-    version = "v0.1_arxiv"
-    url = "https://github.com/cvg/LightGlue/releases/download/{}/{}_lightglue.pth"
-
     def __init__(
         self,
-        extractor: Extractor,
+        url: str,
+        input_dim: int = 256,
         descriptor_dim: int = 256,
         num_heads: int = 4,
         n_layers: int = 9,
@@ -184,8 +181,8 @@ class LightGlue(nn.Module):
         self.depth_confidence = depth_confidence
         self.width_confidence = width_confidence
 
-        if extractor.dim != self.descriptor_dim:
-            self.input_proj = nn.Linear(extractor.dim, self.descriptor_dim, bias=True)
+        if input_dim != self.descriptor_dim:
+            self.input_proj = nn.Linear(input_dim, self.descriptor_dim, bias=True)
         else:
             self.input_proj = nn.Identity()
 
@@ -203,7 +200,7 @@ class LightGlue(nn.Module):
             torch.Tensor([self.confidence_threshold(i) for i in range(n)]),
         )
 
-        state_dict = torch.hub.load_state_dict_from_url(self.url.format(self.version, extractor.value))
+        state_dict = torch.hub.load_state_dict_from_url(url)
 
         # rename old state dict entries
         for i in range(n):

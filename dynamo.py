@@ -4,7 +4,7 @@ from typing import Annotated, Optional
 import cv2
 import typer
 
-from lightglue_dynamo.cli_utils import multiple_of
+from lightglue_dynamo.cli_utils import check_multiple_of
 from lightglue_dynamo.config import Extractor, InferenceDevice
 
 app = typer.Typer()
@@ -25,24 +25,14 @@ def export(
     batch_size: Annotated[
         int,
         typer.Option(
-            "-b",
-            "--batch-size",
-            min=0,
-            help="Batch size of exported ONNX model. Set to 0 to mark as dynamic.",
-            callback=multiple_of(2),
+            "-b", "--batch-size", min=0, help="Batch size of exported ONNX model. Set to 0 to mark as dynamic."
         ),
     ] = 0,
     height: Annotated[
-        int,
-        typer.Option(
-            "-h", "--height", min=0, help="Height of input image. Set to 0 to mark as dynamic.", callback=multiple_of(8)
-        ),
+        int, typer.Option("-h", "--height", min=0, help="Height of input image. Set to 0 to mark as dynamic.")
     ] = 0,
     width: Annotated[
-        int,
-        typer.Option(
-            "-w", "--width", min=0, help="Width of input image. Set to 0 to mark as dynamic.", callback=multiple_of(8)
-        ),
+        int, typer.Option("-w", "--width", min=0, help="Width of input image. Set to 0 to mark as dynamic.")
     ] = 0,
     num_keypoints: Annotated[
         int, typer.Option(min=128, help="Number of keypoints outputted by feature extractor.")
@@ -63,17 +53,23 @@ def export(
     from onnxruntime.tools.symbolic_shape_infer import SymbolicShapeInference
     from onnxruntime.transformers.float16 import convert_float_to_float16
 
-    from lightglue_dynamo.models import LightGlue, Pipeline, SuperPoint
+    from lightglue_dynamo.models import DISK, LightGlue, Pipeline, SuperPoint
     from lightglue_dynamo.ops import use_fused_multi_head_attention
 
     match extractor_type:
         case Extractor.superpoint:
-            extractor = SuperPoint(num_keypoints=num_keypoints).eval()
-    matcher = LightGlue(extractor_type).eval()
-    pipeline = Pipeline(extractor, matcher)
+            extractor = SuperPoint(num_keypoints=num_keypoints)
+        case Extractor.disk:
+            extractor = DISK(num_keypoints=num_keypoints)
+    matcher = LightGlue(**extractor_type.lightglue_config)
+    pipeline = Pipeline(extractor, matcher).eval()
 
     if output is None:
         output = Path(f"weights/{extractor_type}_lightglue_pipeline.onnx")
+
+    check_multiple_of(batch_size, 2)
+    check_multiple_of(height, extractor_type.input_dim_divisor)
+    check_multiple_of(width, extractor_type.input_dim_divisor)
 
     if height > 0 and width > 0 and num_keypoints > height * width:
         raise typer.BadParameter("num_keypoints cannot be greater than height * width.")
@@ -97,7 +93,7 @@ def export(
     dynamic_axes |= {"matches": {0: "num_matches"}, "mscores": {0: "num_matches"}}
     torch.onnx.export(
         pipeline,
-        torch.zeros(batch_size or 2, 1, height or 256, width or 256),
+        torch.zeros(batch_size or 2, extractor_type.input_channels, height or 256, width or 256),
         str(output),
         input_names=["images"],
         output_names=["keypoints", "matches", "mscores"],
@@ -153,16 +149,17 @@ def infer(
     import onnxruntime as ort
 
     from lightglue_dynamo import viz
-    from lightglue_dynamo.preprocessors import SuperPointPreprocessor
+    from lightglue_dynamo.preprocessors import DISKPreprocessor, SuperPointPreprocessor
 
     raw_images = [left_image_path, right_image_path]
     raw_images = [cv2.resize(cv2.imread(str(i)), (width, height)) for i in raw_images]
     images = np.stack(raw_images)
     match extractor_type:
         case Extractor.superpoint:
-            images = SuperPointPreprocessor.preprocess(images).astype(
-                np.float16 if fp16 and device != InferenceDevice.tensorrt else np.float32
-            )
+            images = SuperPointPreprocessor.preprocess(images)
+        case Extractor.disk:
+            images = DISKPreprocessor.preprocess(images)
+    images = images.astype(np.float16 if fp16 and device != InferenceDevice.tensorrt else np.float32)
 
     session_options = ort.SessionOptions()
     session_options.enable_profiling = profile
