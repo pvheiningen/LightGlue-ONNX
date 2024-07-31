@@ -4,7 +4,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 from onnx import load_model, save_model
-from onnxruntime.tools.symbolic_shape_infer import SymbolicShapeInference
+from tools.symbolic_shape_infer import SymbolicShapeInference
 from onnxruntime.transformers.fusion_options import FusionOptions
 
 from lightglue_onnx.optim.onnx_model_lightglue import LightGlueOnnxModel
@@ -68,3 +68,4 @@ if __name__ == "__main__":
         SymbolicShapeInference.infer_shapes(load_model(output_path), auto_merge=True),
         output_path,
     )
+

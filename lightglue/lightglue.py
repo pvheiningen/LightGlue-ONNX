@@ -13,10 +13,7 @@ try:
 except ModuleNotFoundError:
     FlashCrossAttention = None
 
-if FlashCrossAttention or hasattr(F, "scaled_dot_product_attention"):
-    FLASH_AVAILABLE = True
-else:
-    FLASH_AVAILABLE = False
+FLASH_AVAILABLE = False
 
 torch.backends.cudnn.deterministic = True
 
@@ -93,7 +90,7 @@ class Attention(nn.Module):
                 stacklevel=2,
             )
         self.enable_flash = allow_flash and FLASH_AVAILABLE
-        self.has_sdp = hasattr(F, "scaled_dot_product_attention")
+        self.has_sdp = False # hasattr(F, "scaled_dot_product_attention")
         if allow_flash and FlashCrossAttention:
             self.flash_ = FlashCrossAttention()
         if self.has_sdp:
@@ -105,6 +102,7 @@ class Attention(nn.Module):
         if self.enable_flash and q.device.type == "cuda":
             # use torch 2.0 scaled_dot_product_attention with flash
             if self.has_sdp:
+                print("HERE")
                 args = [x.half().contiguous() for x in [q, k, v]]
                 v = F.scaled_dot_product_attention(*args, attn_mask=mask).to(q.dtype)
                 return v if mask is None else v.nan_to_num()
@@ -114,6 +112,7 @@ class Attention(nn.Module):
                 m = self.flash_(q.half(), torch.stack([k, v], 2).half())
                 return m.transpose(-2, -3).to(q.dtype).clone()
         elif self.has_sdp:
+            print("HERE2")
             args = [x.contiguous() for x in [q, k, v]]
             v = F.scaled_dot_product_attention(*args, attn_mask=mask)
             return v if mask is None else v.nan_to_num()
@@ -176,7 +175,7 @@ class CrossBlock(nn.Module):
             nn.Linear(2 * embed_dim, embed_dim),
         )
         if flash and FLASH_AVAILABLE:
-            self.flash = Attention(True)
+            self.flash = None # Attention(True)
         else:
             self.flash = None
 

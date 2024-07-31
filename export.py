@@ -6,6 +6,7 @@ import torch
 from lightglue_onnx import DISK, LightGlue, LightGlueEnd2End, SuperPoint
 from lightglue_onnx.end2end import normalize_keypoints
 from lightglue_onnx.utils import load_image, rgb_to_grayscale
+from lightglue_onnx.ops.sdpa import register_aten_sdpa
 
 
 def parse_args() -> argparse.Namespace:
@@ -114,88 +115,59 @@ def export_onnx(
         )
 
     # ONNX Export
-    if end2end:
-        pipeline = LightGlueEnd2End(extractor, lightglue).eval()
 
-        dynamic_axes = {
+    # Export Extractor
+    dynamic_axes = {
+        "keypoints": {1: "num_keypoints"},
+        "scores": {1: "num_keypoints"},
+        "descriptors": {1: "num_keypoints"},
+    }
+    if dynamic:
+        dynamic_axes.update({"image": {2: "height", 3: "width"}})
+    else:
+        print(
+            f"WARNING: Exporting without --dynamic implies that the {extractor_type} extractor's input image size will be locked to {image0.shape[-2:]}"
+        )
+        extractor_path = extractor_path.replace(
+            ".onnx", f"_{image0.shape[-2]}x{image0.shape[-1]}.onnx"
+        )
+
+    # torch.onnx.export(
+    #     extractor,
+    #     image0[None],
+    #     extractor_path,
+    #     input_names=["image"],
+    #     output_names=["keypoints", "scores", "descriptors"],
+    #     opset_version=17,
+    #     dynamic_axes=dynamic_axes,
+    # )
+
+    # Export LightGlue
+    feats0, feats1 = extractor(image0[None]), extractor(image1[None])
+    kpts0, scores0, desc0 = feats0
+    kpts1, scores1, desc1 = feats1
+
+    kpts0 = normalize_keypoints(kpts0, image0.shape[1], image0.shape[2])
+    kpts1 = normalize_keypoints(kpts1, image1.shape[1], image1.shape[2])
+
+    register_aten_sdpa()
+
+    torch.onnx.export(
+        lightglue,
+        (kpts0, kpts1, desc0, desc1),
+        lightglue_path,
+        input_names=["kpts0", "kpts1", "desc0", "desc1"],
+        output_names=["matches0", "mscores0"],
+        opset_version=11,
+        dynamic_axes={
             "kpts0": {1: "num_keypoints0"},
             "kpts1": {1: "num_keypoints1"},
+            "desc0": {1: "num_keypoints0"},
+            "desc1": {1: "num_keypoints1"},
             "matches0": {0: "num_matches0"},
             "mscores0": {0: "num_matches0"},
-        }
-        if dynamic:
-            dynamic_axes.update(
-                {
-                    "image0": {2: "height0", 3: "width0"},
-                    "image1": {2: "height1", 3: "width1"},
-                }
-            )
-
-        torch.onnx.export(
-            pipeline,
-            (image0[None], image1[None]),
-            lightglue_path,
-            input_names=["image0", "image1"],
-            output_names=[
-                "kpts0",
-                "kpts1",
-                "matches0",
-                "mscores0",
-            ],
-            opset_version=17,
-            dynamic_axes=dynamic_axes,
-        )
-    else:
-        # Export Extractor
-        dynamic_axes = {
-            "keypoints": {1: "num_keypoints"},
-            "scores": {1: "num_keypoints"},
-            "descriptors": {1: "num_keypoints"},
-        }
-        if dynamic:
-            dynamic_axes.update({"image": {2: "height", 3: "width"}})
-        else:
-            print(
-                f"WARNING: Exporting without --dynamic implies that the {extractor_type} extractor's input image size will be locked to {image0.shape[-2:]}"
-            )
-            extractor_path = extractor_path.replace(
-                ".onnx", f"_{image0.shape[-2]}x{image0.shape[-1]}.onnx"
-            )
-
-        torch.onnx.export(
-            extractor,
-            image0[None],
-            extractor_path,
-            input_names=["image"],
-            output_names=["keypoints", "scores", "descriptors"],
-            opset_version=17,
-            dynamic_axes=dynamic_axes,
-        )
-
-        # Export LightGlue
-        feats0, feats1 = extractor(image0[None]), extractor(image1[None])
-        kpts0, scores0, desc0 = feats0
-        kpts1, scores1, desc1 = feats1
-
-        kpts0 = normalize_keypoints(kpts0, image0.shape[1], image0.shape[2])
-        kpts1 = normalize_keypoints(kpts1, image1.shape[1], image1.shape[2])
-
-        torch.onnx.export(
-            lightglue,
-            (kpts0, kpts1, desc0, desc1),
-            lightglue_path,
-            input_names=["kpts0", "kpts1", "desc0", "desc1"],
-            output_names=["matches0", "mscores0"],
-            opset_version=17,
-            dynamic_axes={
-                "kpts0": {1: "num_keypoints0"},
-                "kpts1": {1: "num_keypoints1"},
-                "desc0": {1: "num_keypoints0"},
-                "desc1": {1: "num_keypoints1"},
-                "matches0": {0: "num_matches0"},
-                "mscores0": {0: "num_matches0"},
-            },
-        )
+        },
+    )
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from torch.onnx._globals import GLOBALS
 from torch.onnx._internal import _beartype, jit_utils, registration
 
 
-def register_aten_sdpa(opset_version=14):
+def register_aten_sdpa(opset_version=11):
     torch.onnx.register_custom_op_symbolic(
         "aten::scaled_dot_product_attention",
         scaled_dot_product_attention,

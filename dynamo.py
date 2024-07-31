@@ -44,7 +44,7 @@ def export(
             help="Fuse multi-head attention subgraph into one optimized operation. (ONNX Runtime-only).",
         ),
     ] = False,
-    opset: Annotated[int, typer.Option(min=16, max=20, help="ONNX opset version of exported model.")] = 17,
+    opset: Annotated[int, typer.Option(min=11, max=20, help="ONNX opset version of exported model.")] = 11,
     fp16: Annotated[bool, typer.Option("--fp16", help="Whether to also convert to FP16.")] = False,
 ):
     """Export LightGlue to ONNX."""
