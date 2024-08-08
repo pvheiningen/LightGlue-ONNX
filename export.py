@@ -146,17 +146,21 @@ def export_onnx(
     # )
 
     # Export LightGlue
-    feats0, feats1 = extractor(image0[None]), extractor(image1[None])
-    kpts0, scores0, desc0 = feats0
-    kpts1, scores1, desc1 = feats1
+    feats0, feats1 = extractor.extract(image0), extractor.extract(image1)
+    kpts0, desc0 = feats0["keypoints"], feats0["descriptors"]
+    kpts1, desc1 = feats1["keypoints"], feats1["descriptors"]
 
     kpts0 = normalize_keypoints(kpts0, image0.shape[1], image0.shape[2])
     kpts1 = normalize_keypoints(kpts1, image1.shape[1], image1.shape[2])
 
+    kpts0 = torch.cat(
+        [kpts0] + [feats0[k].unsqueeze(-1) for k in ("scales", "oris")], -1
+    )
+    kpts1 = torch.cat(
+        [kpts1] + [feats1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
+    )
+
     register_aten_sdpa()
-
-
-
 
     torch.onnx.export(
         lightglue,

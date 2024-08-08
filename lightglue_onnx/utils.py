@@ -1,9 +1,40 @@
-from typing import List, Optional, Union
+import collections.abc as collections
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Callable, List, Optional, Tuple, Union
 
 import cv2
+import kornia
 import numpy as np
 import torch
+
+class ImagePreprocessor:
+    default_conf = {
+        "resize": None,  # target edge length, None for no resizing
+        "side": "long",
+        "interpolation": "bilinear",
+        "align_corners": None,
+        "antialias": True,
+    }
+
+    def __init__(self, **conf) -> None:
+        super().__init__()
+        self.conf = {**self.default_conf, **conf}
+        self.conf = SimpleNamespace(**self.conf)
+
+    def __call__(self, img: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Resize and preprocess an image, return image and resize scale"""
+        h, w = img.shape[-2:]
+        if self.conf.resize is not None:
+            img = kornia.geometry.transform.resize(
+                img,
+                self.conf.resize,
+                side=self.conf.side,
+                antialias=self.conf.antialias,
+                align_corners=self.conf.align_corners,
+            )
+        scale = torch.Tensor([img.shape[-1] / w, img.shape[-2] / h]).to(img)
+        return img, scale
 
 
 def read_image(path: str, grayscale: bool = False) -> np.ndarray:

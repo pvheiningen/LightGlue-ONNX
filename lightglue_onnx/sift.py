@@ -197,7 +197,9 @@ class SIFT(Extractor):
         return pred
 
     def forward(self, data: dict) -> dict:
-        image = data
+        image = data["image"]
+        if image.shape[1] == 3:
+            image = rgb_to_grayscale(image)
 
         device = image.device
         image = image.cpu()
