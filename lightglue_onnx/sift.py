@@ -138,6 +138,7 @@ class SIFT(Extractor):
             )
 
     def extract_single_image(self, image: torch.Tensor):
+        print(image.shape)
         image_np = image.cpu().numpy().squeeze(0)
 
         if self.conf.backend.startswith("pycolmap"):
@@ -201,6 +202,9 @@ class SIFT(Extractor):
         device = image.device
         image = image.cpu()
         pred = []
+
+        print(image.shape)
+
         for k in range(image.shape[0]):
             img = image[k]
             if False and "image_size" in data.keys():

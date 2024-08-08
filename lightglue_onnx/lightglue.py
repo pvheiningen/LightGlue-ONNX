@@ -201,6 +201,32 @@ class MatchAssignment(nn.Module):
         return torch.sigmoid(self.matchability(desc)).squeeze(-1)
 
 
+def custom_gather(input, dim, index):
+    # Get the shape of the input tensor
+    index_shape = index.shape
+    
+    # Initialize an output tensor with the same shape as index tensor
+    output = torch.zeros_like(index, dtype=input.dtype)
+    
+    # Iterate over all indices in the index tensor
+    for flat_index in range(index.numel()):
+        # Convert the flat index into a multi-dimensional index
+        multi_dim_idx = list()
+        remaining = flat_index
+        for size in reversed(index_shape):
+            multi_dim_idx.append(remaining % size)
+            remaining //= size
+        multi_dim_idx.reverse()
+        
+        # Update the multi-dimensional index to fetch from input tensor
+        multi_dim_idx[dim] = index.view(-1)[flat_index].item()
+        
+        # Fetch the value from input tensor and assign to output tensor
+        output.view(-1)[flat_index] = input[tuple(multi_dim_idx)]
+    
+    return output
+
+
 def filter_matches(scores: torch.Tensor, th: float):
     """obtain matches from a log assignment matrix [BxMxN]"""
     max0 = torch.topk(scores, k=1, dim=2, sorted=False)  # scores.max(2)
@@ -209,24 +235,43 @@ def filter_matches(scores: torch.Tensor, th: float):
     indices0 = torch.arange(m0.shape[1], device=m0.device)[None]
     # indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
     print("HIERO")
-    mutual0 = indices0 == m1.gather(1, m0)
+    mutual0 = indices0 == custom_gather(m1, 1, m0)
     # mutual1 = indices1 == m0.gather(1, m1)
     max0_exp = max0.values[:, :, 0].exp()
     zero = max0_exp.new_tensor(0)
     mscores0 = torch.where(mutual0, max0_exp, zero)
+    
     # mscores1 = torch.where(mutual1, mscores0.gather(1, m1), zero)
-    valid0 = mscores0 > th
+    #valid0 = mscores0 > th #original
+    #valid0 = torch.where(mscores0 > th, 1, 0).bool()
     # valid1 = mutual1 & valid0.gather(1, m1)
     # m0 = torch.where(valid0, m0, -1)
     # m1 = torch.where(valid1, m1, -1)
     # return m0, m1, mscores0, mscores1
 
-    m_indices_0 = indices0[valid0]
+    m_indices_0 = indices0 #[valid0]
     m_indices_1 = m0[0][m_indices_0]
 
     matches = torch.stack([m_indices_0, m_indices_1], -1)
     mscores = mscores0[0][m_indices_0]
     return matches, mscores
+
+# Dim 0:
+# [[1, 2]
+#  [3, 4]]
+
+# Dim 1:
+# [[1, 2]
+#  [3, 4]]
+
+
+class TestModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, scores):
+        return filter_matches(scores, 0.5)
+
 
 
 class LightGlue(nn.Module):
@@ -234,6 +279,7 @@ class LightGlue(nn.Module):
         "name": "lightglue",  # just for interfacing
         "input_dim": 256,  # input descriptor dimension (autoselected from weights)
         "descriptor_dim": 256,
+        "add_scale_ori": False,
         "n_layers": 9,
         "num_heads": 4,
         "filter_threshold": 0.1,  # match threshold
@@ -246,17 +292,32 @@ class LightGlue(nn.Module):
     url = "https://github.com/cvg/LightGlue/releases/download/{}/{}_lightglue.pth"
 
     features = {
-        "superpoint": ("superpoint_lightglue", 256),
-        "disk": ("disk_lightglue", 128),
+        "superpoint": {
+            "weights": "superpoint_lightglue",
+            "input_dim": 256,
+        },
+        "disk": {
+            "weights": "disk_lightglue",
+            "input_dim": 128,
+        },
+        "sift": {
+            "weights": "sift_lightglue",
+            "input_dim": 128,
+            "add_scale_ori": True,
+        },
     }
 
     def __init__(self, features="superpoint", **conf) -> None:
         super().__init__()
-        self.conf = {**self.default_conf, **conf}
+        self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         if features is not None:
-            assert features in self.features
-            self.conf["weights"], self.conf["input_dim"] = self.features[features]
-        self.conf = conf = SimpleNamespace(**self.conf)
+            if features not in self.features:
+                raise ValueError(
+                    f"Unsupported features: {features} not in "
+                    f"{{{','.join(self.features)}}}"
+                )
+            for k, v in self.features[features].items():
+                setattr(conf, k, v)
 
         if conf.input_dim != conf.descriptor_dim:
             self.input_proj = nn.Linear(conf.input_dim, conf.descriptor_dim, bias=True)
@@ -264,7 +325,9 @@ class LightGlue(nn.Module):
             self.input_proj = nn.Identity()
 
         head_dim = conf.descriptor_dim // conf.num_heads
-        self.posenc = LearnableFourierPositionalEncoding(2, head_dim)
+        self.posenc = LearnableFourierPositionalEncoding(
+            2 + 2 * self.conf.add_scale_ori, head_dim, head_dim
+        )
 
         h, n, d = conf.num_heads, conf.n_layers, conf.descriptor_dim
 
@@ -282,7 +345,7 @@ class LightGlue(nn.Module):
 
         state_dict = None
         if features is not None:
-            fname = f"{conf.weights}_{self.version}.pth".replace(".", "-")
+            fname = f"{conf.weights}_{self.version.replace('.', '-')}.pth"
             state_dict = torch.hub.load_state_dict_from_url(
                 self.url.format(self.version, features), file_name=fname
             )

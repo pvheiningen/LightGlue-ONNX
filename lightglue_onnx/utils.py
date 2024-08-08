@@ -1,4 +1,5 @@
 from typing import List, Optional, Union
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -104,3 +105,21 @@ def match_pair(extractor, matcher, image0, image1, scales0=None, scales1=None):
     valid = matches0 > -1
     matches = torch.stack([torch.where(valid)[0], matches0[valid]], -1)
     return {**pred, "matches": matches, "matching_scores": mscores0[valid]}
+
+class Extractor(torch.nn.Module):
+    def __init__(self, **conf):
+        super().__init__()
+        self.conf = SimpleNamespace(**{**self.default_conf, **conf})
+
+    @torch.no_grad()
+    def extract(self, img: torch.Tensor, **conf) -> dict:
+        """Perform extraction with online resizing"""
+        if img.dim() == 3:
+            img = img[None]  # add batch dim
+        assert img.dim() == 4 and img.shape[0] == 1
+        shape = img.shape[-2:][::-1]
+        img, scales = ImagePreprocessor(**{**self.preprocess_conf, **conf})(img)
+        feats = self.forward({"image": img})
+        feats["image_size"] = torch.tensor(shape)[None].to(img).float()
+        feats["keypoints"] = (feats["keypoints"] + 0.5) / scales[None] - 0.5
+        return feats

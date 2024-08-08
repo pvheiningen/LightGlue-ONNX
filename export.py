@@ -3,7 +3,7 @@ from typing import List
 
 import torch
 
-from lightglue_onnx import DISK, LightGlue, LightGlueEnd2End, SuperPoint
+from lightglue_onnx import DISK, LightGlue, SIFT, LightGlueEnd2End, SuperPoint
 from lightglue_onnx.end2end import normalize_keypoints
 from lightglue_onnx.utils import load_image, rgb_to_grayscale
 from lightglue_onnx.ops.sdpa import register_aten_sdpa
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
         "--extractor_type",
         type=str,
         default="superpoint",
-        choices=["superpoint", "disk"],
+        choices=["superpoint", "disk", "sift"],
         required=False,
         help="Type of feature extractor. Supported extractors are 'superpoint' and 'disk'. Defaults to 'superpoint'.",
     )
@@ -109,6 +109,9 @@ def export_onnx(
     elif extractor_type == "disk":
         extractor = DISK(max_num_keypoints=max_num_keypoints).eval()
         lightglue = LightGlue(extractor_type).eval()
+    elif extractor_type == "sift":
+        extractor = SIFT(max_num_keypoints=max_num_keypoints).eval()
+        lightglue = LightGlue(extractor_type).eval()        
     else:
         raise NotImplementedError(
             f"LightGlue has not been trained on {extractor_type} features."
@@ -152,6 +155,9 @@ def export_onnx(
 
     register_aten_sdpa()
 
+
+
+
     torch.onnx.export(
         lightglue,
         (kpts0, kpts1, desc0, desc1),
@@ -168,6 +174,16 @@ def export_onnx(
             "mscores0": {0: "num_matches0"},
         },
     )
+    
+    # from lightglue_onnx.lightglue import TestModel
+    #from lightglue_onnx.lightglue import filter_matches
+
+    # model = TestModel()
+    # scores = torch.randn([1, 736, 858])
+    # torch.onnx.export(model, (scores), 'weights/filter_matches.onnx', 
+    #                 input_names=["scores"],
+    #                 output_names=["matches0", "mscores0"], 
+    #                 opset_version=11)
 
 
 if __name__ == "__main__":
