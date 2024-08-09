@@ -388,6 +388,7 @@ class LightGlue(nn.Module):
             ind0 = torch.arange(0, m, device=kpts0.device)[None]
             ind1 = torch.arange(0, n, device=kpts0.device)[None]
 
+        print("layers: ", self.conf.n_layers)
         for i in range(self.conf.n_layers):
             # self+cross attention
             desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
@@ -417,7 +418,14 @@ class LightGlue(nn.Module):
 
         # desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]
         scores = self.log_assignment[i](desc0, desc1)
+
+        print(scores)
+        
+        print("Filter threshold: ", self.conf.filter_threshold)
+        
         matches, mscores = filter_matches(scores, self.conf.filter_threshold)
+
+        print(f"Detected {mscores.shape[0]} matching points")
 
         return matches, mscores
         # Skip unnecessary computation

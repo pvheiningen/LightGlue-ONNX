@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max_num_keypoints",
         type=int,
-        default=4096,
+        default=2048,
         required=False,
         help="Maximum number of keypoints outputted by the extractor.",
     )
@@ -67,8 +67,8 @@ def export_onnx(
     extractor_type="superpoint",
     extractor_path=None,
     lightglue_path=None,
-    img0_path="assets/sacre_coeur1.jpg",
-    img1_path="assets/sacre_coeur2.jpg",
+    img0_path="/srv/calibrations/GlobalFootball2/01_11v11_soccer_amfb_green/image0-synchronized.jpg",
+    img1_path="/srv/calibrations/GlobalFootball2/01_11v11_soccer_amfb_green/image1-synchronized.jpg",
     end2end=False,
     dynamic=False,
     max_num_keypoints=None,
@@ -96,8 +96,12 @@ def export_onnx(
         )
 
     # Sample images for tracing
-    image0, scales0 = load_image(img0_path, resize=img_size)
-    image1, scales1 = load_image(img1_path, resize=img_size)
+    clip_percentage = 0.10
+    image0_clip_coord = int(4104 * (1-clip_percentage))
+    image1_clip_coord = int(4104 * clip_percentage)
+    image0 = load_image(img0_path)[:, :, image0_clip_coord:]
+    image1 = load_image(img1_path)[:, :, :image1_clip_coord]
+
     # Models
     extractor_type = extractor_type.lower()
     if extractor_type == "superpoint":
@@ -110,8 +114,8 @@ def export_onnx(
         extractor = DISK(max_num_keypoints=max_num_keypoints).eval()
         lightglue = LightGlue(extractor_type).eval()
     elif extractor_type == "sift":
-        extractor = SIFT(max_num_keypoints=max_num_keypoints).eval()
-        lightglue = LightGlue(extractor_type).eval()        
+        extractor = SIFT(max_num_keypoints=2048).eval()
+        lightglue = LightGlue(extractor_type, filter_threshold=0.98, depth_confidence=-1, width_confidence=-1).eval()        
     else:
         raise NotImplementedError(
             f"LightGlue has not been trained on {extractor_type} features."
@@ -160,6 +164,10 @@ def export_onnx(
         [kpts1] + [feats1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
     )
 
+    print(kpts0)
+    print(desc0)
+
+    # Export as numpy arrays so they can be loaded in native-camera-tools
     import numpy as np
     np.save('kpts0.npy', kpts0.detach().cpu().numpy())
     np.save('desc0.npy', desc0.detach().cpu().numpy())
@@ -167,14 +175,9 @@ def export_onnx(
     np.save('desc1.npy', desc1.detach().cpu().numpy())
     print("saved")
 
-    # print(kpts0)
-    # print(desc0)
-    # print(kpts1)
-    # print(desc1)
-    # print(kpts0.shape)
-    # print(desc0.shape)
-    # print(kpts1.shape)
-    # print(desc1.shape)
+
+    print(f"Found {kpts0.shape[1]} keypoints in image 0")
+    print(f"Found {kpts1.shape[1]} keypoints in image 1")
 
     register_aten_sdpa()
 
@@ -182,38 +185,28 @@ def export_onnx(
         padding = torch.zeros(target_size - tensor.shape[1], tensor.shape[2])
         return torch.cat((tensor[0], padding))[None]
 
-    # Add padding to kpts0 to get total of 2048 keypoints
-    kpts0_padded = pad(kpts0, max_num_keypoints)
-    kpts1_padded = pad(kpts1, max_num_keypoints)
-    desc0_padded = pad(desc0, max_num_keypoints)
-    desc1_padded = pad(desc1, max_num_keypoints)
+    # Add padding to kpts0 to get total keypoints
+    # kpts0_padded = pad(kpts0, max_num_keypoints)
+    # kpts1_padded = pad(kpts1, max_num_keypoints)
+    # desc0_padded = pad(desc0, max_num_keypoints)
+    # desc1_padded = pad(desc1, max_num_keypoints)
 
     torch.onnx.export(
         lightglue,
-        (kpts0_padded, kpts1_padded, desc0_padded, desc1_padded),
+        (kpts0, kpts1, desc0, desc1),
         lightglue_path,
         input_names=["kpts0", "kpts1", "desc0", "desc1"],
         output_names=["matches0", "mscores0"],
         opset_version=11,
-        # dynamic_axes={
-        #     "kpts0": {1: "num_keypoints0"},
-        #     "kpts1": {1: "num_keypoints1"},
-        #     "desc0": {1: "num_keypoints0"},
-        #     "desc1": {1: "num_keypoints1"},
-        #     "matches0": {0: "num_matches0"},
-        #     "mscores0": {0: "num_matches0"},
-        # },
+        dynamic_axes={
+            "kpts0": {1: "num_keypoints0"},
+            "kpts1": {1: "num_keypoints1"},
+            "desc0": {1: "num_keypoints0"},
+            "desc1": {1: "num_keypoints1"},
+            "matches0": {0: "num_matches0"},
+            "mscores0": {0: "num_matches0"},
+        },
     )
-    
-    # from lightglue_onnx.lightglue import TestModel
-    #from lightglue_onnx.lightglue import filter_matches
-
-    # model = TestModel()
-    # scores = torch.randn([1, 736, 858])
-    # torch.onnx.export(model, (scores), 'weights/filter_matches.onnx', 
-    #                 input_names=["scores"],
-    #                 output_names=["matches0", "mscores0"], 
-    #                 opset_version=11)
 
 
 if __name__ == "__main__":

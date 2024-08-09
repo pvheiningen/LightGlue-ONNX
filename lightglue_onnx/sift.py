@@ -128,7 +128,7 @@ class SIFT(Extractor):
         elif backend == "opencv":
             self.sift = cv2.SIFT_create(
                 contrastThreshold=self.conf.detection_threshold,
-                nfeatures=None, #self.conf.max_num_keypoints,
+                nfeatures=self.conf.max_num_keypoints,
                 edgeThreshold=self.conf.edge_threshold,
                 nOctaveLayers=self.conf.num_octaves,
             )
@@ -194,8 +194,6 @@ class SIFT(Extractor):
                 indices = torch.topk(pred["keypoint_scores"], num_points).indices
                 pred = {k: v[indices] for k, v in pred.items()}
 
-        print(pred["keypoints"].shape)
-
         return pred
 
     def forward(self, data: dict) -> dict:
@@ -207,9 +205,9 @@ class SIFT(Extractor):
         image = image.cpu()
         pred = []
 
-        for k in range(image.shape[0]):
+        for k in range(len(image)):
             img = image[k]
-            if False and "image_size" in data.keys():
+            if "image_size" in data.keys():
                 # avoid extracting points in padded areas
                 w, h = data["image_size"][k]
                 img = img[:, :h, :w]

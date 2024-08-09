@@ -62,7 +62,7 @@ def numpy_image_to_torch(image: np.ndarray) -> torch.Tensor:
 def resize_image(
     image: np.ndarray,
     size: Union[List[int], int],
-    fn: str,
+    fn: str = "max",
     interp: Optional[str] = "area",
 ) -> np.ndarray:
     """Resize an image to a fixed size, or according to max or min edge."""
@@ -87,18 +87,11 @@ def resize_image(
     return cv2.resize(image, (w_new, h_new), interpolation=mode), scale
 
 
-def load_image(
-    path: str,
-    grayscale: bool = False,
-    resize: int = None,
-    fn: str = "max",
-    interp: str = "area",
-) -> torch.Tensor:
-    img = read_image(path, grayscale=grayscale)
-    scales = [1, 1]
+def load_image(path: Path, resize: int = None, **kwargs) -> torch.Tensor:
+    image = read_image(path)
     if resize is not None:
-        img, scales = resize_image(img, resize, fn=fn, interp=interp)
-    return numpy_image_to_torch(img), torch.Tensor(scales)
+        image, _ = resize_image(image, resize, **kwargs)
+    return numpy_image_to_torch(image)
 
 
 def rgb_to_grayscale(image: torch.Tensor) -> torch.Tensor:
