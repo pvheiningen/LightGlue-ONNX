@@ -96,6 +96,7 @@ class SIFT(Extractor):
 
     def __init__(self, **conf):
         super().__init__(**conf)  # Update with default configuration.
+
         backend = self.conf.backend
         if backend.startswith("pycolmap"):
             if pycolmap is None:
@@ -127,7 +128,7 @@ class SIFT(Extractor):
         elif backend == "opencv":
             self.sift = cv2.SIFT_create(
                 contrastThreshold=self.conf.detection_threshold,
-                nfeatures=self.conf.max_num_keypoints,
+                nfeatures=None, #self.conf.max_num_keypoints,
                 edgeThreshold=self.conf.edge_threshold,
                 nOctaveLayers=self.conf.num_octaves,
             )
@@ -138,7 +139,6 @@ class SIFT(Extractor):
             )
 
     def extract_single_image(self, image: torch.Tensor):
-        print(image.shape)
         image_np = image.cpu().numpy().squeeze(0)
 
         if self.conf.backend.startswith("pycolmap"):
@@ -194,6 +194,8 @@ class SIFT(Extractor):
                 indices = torch.topk(pred["keypoint_scores"], num_points).indices
                 pred = {k: v[indices] for k, v in pred.items()}
 
+        print(pred["keypoints"].shape)
+
         return pred
 
     def forward(self, data: dict) -> dict:
@@ -205,8 +207,6 @@ class SIFT(Extractor):
         image = image.cpu()
         pred = []
 
-        print(image.shape)
-
         for k in range(image.shape[0]):
             img = image[k]
             if False and "image_size" in data.keys():
@@ -216,6 +216,8 @@ class SIFT(Extractor):
             p = self.extract_single_image(img)
             pred.append(p)
         pred = {k: torch.stack([p[k] for p in pred], 0).to(device) for k in pred[0]}
+
         if self.conf.rootsift:
             pred["descriptors"] = sift_to_rootsift(pred["descriptors"])
+
         return pred

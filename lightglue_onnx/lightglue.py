@@ -234,21 +234,21 @@ def filter_matches(scores: torch.Tensor, th: float):
     m0, m1 = max0.indices[:, :, 0], max1.indices[:, 0, :]
     indices0 = torch.arange(m0.shape[1], device=m0.device)[None]
     # indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
-    mutual0 = indices0 == custom_gather(m1, 1, m0)
+    mutual0 = indices0 == m1.gather(1, m0) # custom_gather(m1, 1, m0)
     # mutual1 = indices1 == m0.gather(1, m1)
     max0_exp = max0.values[:, :, 0].exp()
     zero = max0_exp.new_tensor(0)
     mscores0 = torch.where(mutual0, max0_exp, zero)
     
     # mscores1 = torch.where(mutual1, mscores0.gather(1, m1), zero)
-    #valid0 = mscores0 > th #original
+    valid0 = mscores0 > th #original
     #valid0 = torch.where(mscores0 > th, 1, 0).bool()
     # valid1 = mutual1 & valid0.gather(1, m1)
     # m0 = torch.where(valid0, m0, -1)
     # m1 = torch.where(valid1, m1, -1)
     # return m0, m1, mscores0, mscores1
 
-    m_indices_0 = indices0 #[valid0]
+    m_indices_0 = indices0[valid0]
     m_indices_1 = m0[0][m_indices_0]
 
     matches = torch.stack([m_indices_0, m_indices_1], -1)
@@ -418,6 +418,7 @@ class LightGlue(nn.Module):
         # desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]
         scores = self.log_assignment[i](desc0, desc1)
         matches, mscores = filter_matches(scores, self.conf.filter_threshold)
+
         return matches, mscores
         # Skip unnecessary computation
         m0, m1, mscores0, mscores1 = filter_matches(scores, self.conf.filter_threshold)

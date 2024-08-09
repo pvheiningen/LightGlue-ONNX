@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max_num_keypoints",
         type=int,
-        default=None,
+        default=4096,
         required=False,
         help="Maximum number of keypoints outputted by the extractor.",
     )
@@ -160,23 +160,49 @@ def export_onnx(
         [kpts1] + [feats1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
     )
 
+    import numpy as np
+    np.save('kpts0.npy', kpts0.detach().cpu().numpy())
+    np.save('desc0.npy', desc0.detach().cpu().numpy())
+    np.save('kpts1.npy', kpts1.detach().cpu().numpy())
+    np.save('desc1.npy', desc1.detach().cpu().numpy())
+    print("saved")
+
+    # print(kpts0)
+    # print(desc0)
+    # print(kpts1)
+    # print(desc1)
+    # print(kpts0.shape)
+    # print(desc0.shape)
+    # print(kpts1.shape)
+    # print(desc1.shape)
+
     register_aten_sdpa()
+
+    def pad(tensor, target_size):
+        padding = torch.zeros(target_size - tensor.shape[1], tensor.shape[2])
+        return torch.cat((tensor[0], padding))[None]
+
+    # Add padding to kpts0 to get total of 2048 keypoints
+    kpts0_padded = pad(kpts0, max_num_keypoints)
+    kpts1_padded = pad(kpts1, max_num_keypoints)
+    desc0_padded = pad(desc0, max_num_keypoints)
+    desc1_padded = pad(desc1, max_num_keypoints)
 
     torch.onnx.export(
         lightglue,
-        (kpts0, kpts1, desc0, desc1),
+        (kpts0_padded, kpts1_padded, desc0_padded, desc1_padded),
         lightglue_path,
         input_names=["kpts0", "kpts1", "desc0", "desc1"],
         output_names=["matches0", "mscores0"],
         opset_version=11,
-        dynamic_axes={
-            "kpts0": {1: "num_keypoints0"},
-            "kpts1": {1: "num_keypoints1"},
-            "desc0": {1: "num_keypoints0"},
-            "desc1": {1: "num_keypoints1"},
-            "matches0": {0: "num_matches0"},
-            "mscores0": {0: "num_matches0"},
-        },
+        # dynamic_axes={
+        #     "kpts0": {1: "num_keypoints0"},
+        #     "kpts1": {1: "num_keypoints1"},
+        #     "desc0": {1: "num_keypoints0"},
+        #     "desc1": {1: "num_keypoints1"},
+        #     "matches0": {0: "num_matches0"},
+        #     "mscores0": {0: "num_matches0"},
+        # },
     )
     
     # from lightglue_onnx.lightglue import TestModel
