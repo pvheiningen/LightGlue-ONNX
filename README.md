@@ -1,7 +1,7 @@
 HUDL HOW TO USE:
 
 python3 export.py --extractor_type=sift --lightglue_path weights/sift_lightglue.onnx --dynamic
-/usr/src/tensorrt/bin/trtexec --onnx=weights/sift_lightglue.onnx  --saveEngine=weights/sift_lightglue.engine
+/usr/src/tensorrt/bin/trtexec --onnx=weights/sift_lightglue.onnx  --saveEngine=/srv/sift_lightglue.engine
 
 
 <div align="right"> English | <a href="https://github.com/fabio-sim/LightGlue-ONNX/blob/main/docs/README.zh.md">简体中文</a></div>
