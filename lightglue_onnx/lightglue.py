@@ -418,8 +418,6 @@ class LightGlue(nn.Module):
 
         # desc0, desc1 = desc0[..., :m, :], desc1[..., :n, :]
         scores = self.log_assignment[i](desc0, desc1)
-
-        print(scores)
         
         print("Filter threshold: ", self.conf.filter_threshold)
         
