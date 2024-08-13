@@ -1,6 +1,6 @@
 HUDL HOW TO USE:
 
-python3 export.py --extractor_type=sift --lightglue_path weights/sift_lightglue.onnx --dynamic
+python3 export.py --extractor_type=sift --lightglue_path weights/sift_lightglue.onnx
 /usr/src/tensorrt/bin/trtexec --onnx=weights/sift_lightglue.onnx  --saveEngine=/srv/sift_lightglue.engine
 
 
