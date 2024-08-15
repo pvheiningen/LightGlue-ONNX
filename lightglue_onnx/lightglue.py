@@ -201,45 +201,37 @@ class MatchAssignment(nn.Module):
         return torch.sigmoid(self.matchability(desc)).squeeze(-1)
 
 
-def custom_gather(input, dim, index):
-    # Get the shape of the input tensor
-    index_shape = index.shape
+def custom_gather(input, index):
+    # Create a tensor representing the batch indices
+    batch_indices = torch.arange(input.shape[0], device=input.device)
     
-    # Initialize an output tensor with the same shape as index tensor
-    output = torch.zeros_like(index, dtype=input.dtype)
-    
-    # Iterate over all indices in the index tensor
-    for flat_index in range(index.numel()):
-        # Convert the flat index into a multi-dimensional index
-        multi_dim_idx = list()
-        remaining = flat_index
-        for size in reversed(index_shape):
-            multi_dim_idx.append(remaining % size)
-            remaining //= size
-        multi_dim_idx.reverse()
-        
-        # Update the multi-dimensional index to fetch from input tensor
-        multi_dim_idx[dim] = index.view(-1)[flat_index].item()
-        
-        # Fetch the value from input tensor and assign to output tensor
-        output.view(-1)[flat_index] = input[tuple(multi_dim_idx)]
+    # Gather the values using advanced indexing
+    output = input[batch_indices, index]
     
     return output
 
 
 def filter_matches(scores: torch.Tensor, th: float):
     """obtain matches from a log assignment matrix [BxMxN]"""
-    max0 = torch.topk(scores, k=1, dim=2, sorted=False)  # scores.max(2)
-    max1 = torch.topk(scores, k=1, dim=1, sorted=False)  # scores.max(1)
-    m0, m1 = max0.indices[:, :, 0], max1.indices[:, 0, :]
-    indices0 = torch.arange(m0.shape[1], device=m0.device)[None]
+    max0 = torch.topk(scores, k=1, dim=2, sorted=False)  # The maximum value in each x-axis
+    max1 = torch.topk(scores, k=1, dim=1, sorted=False)  # The maximum value in each y-axis
+    m0, m1 = max0.indices[:, :, 0], max1.indices[:, 0, :] # The indices of the maximum values per axis
+
+    indices0 = torch.arange(m0.shape[1], device=m0.device)[None] # 
     # indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
-    mutual0 = indices0 == m1.gather(1, m0) # custom_gather(m1, 1, m0)
+    
+    # print(f"max0: {max0}")
+    # print(f"m0: {m0}")
+    # print(f"indices0: {indices0}")
+    # print(f"custom_gather(m1, m0): {custom_gather(m1, m0)}")
+
+    mutual0 = (indices0 == custom_gather(m1, m0)) # custom_gather(m1, 1, m0)
+
     # mutual1 = indices1 == m0.gather(1, m1)
     max0_exp = max0.values[:, :, 0].exp()
     zero = max0_exp.new_tensor(0)
-    mscores0 = torch.where(mutual0, max0_exp, zero)
-    
+    mscores0 = torch.where(mutual0, max0_exp, zero) # The scores of the points above the threshold, 0 otherwise
+
     # mscores1 = torch.where(mutual1, mscores0.gather(1, m1), zero)
     valid0 = mscores0 > th #original
     #valid0 = torch.where(mscores0 > th, 1, 0).bool()
@@ -253,6 +245,7 @@ def filter_matches(scores: torch.Tensor, th: float):
 
     matches = torch.stack([m_indices_0, m_indices_1], -1)
     mscores = mscores0[0][m_indices_0]
+
     return matches, mscores
 
 # Dim 0:
@@ -421,11 +414,12 @@ class LightGlue(nn.Module):
         
         print("Filter threshold: ", self.conf.filter_threshold)
         
-        matches, mscores = filter_matches(scores, self.conf.filter_threshold)
+        matches, _ = filter_matches(scores, self.conf.filter_threshold)
+        print(matches)
 
-        print(f"Detected {mscores.shape[0]} matching points")
+        # print(f"Detected {mscores.shape[0]} matching points")
 
-        return matches, mscores
+        return scores.exp()
         # Skip unnecessary computation
         m0, m1, mscores0, mscores1 = filter_matches(scores, self.conf.filter_threshold)
 

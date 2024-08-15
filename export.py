@@ -2,6 +2,7 @@ import argparse
 from typing import List
 
 import torch
+import onnx
 
 from lightglue_onnx import DISK, LightGlue, SIFT, LightGlueEnd2End, SuperPoint
 from lightglue_onnx.end2end import normalize_keypoints
@@ -158,12 +159,8 @@ def export_onnx(
     kpts0, desc0 = feats0["keypoints"], feats0["descriptors"]
     kpts1, desc1 = feats1["keypoints"], feats1["descriptors"]
 
-    print(f"Original keypoints: {kpts0[0][:10]}")
-
     kpts0 = normalize_keypoints(kpts0, image0.shape[1], image0.shape[2])
     kpts1 = normalize_keypoints(kpts1, image1.shape[1], image1.shape[2])
-
-    print(f"Normalized keypoints: {kpts0[0][:10]}")
 
     kpts0 = torch.cat(
         [kpts0] + [feats0[k].unsqueeze(-1) for k in ("scales", "oris")], -1
@@ -171,9 +168,6 @@ def export_onnx(
     kpts1 = torch.cat(
         [kpts1] + [feats1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
     )
-
-    print(kpts0)
-    print(desc0)
 
     # Export as numpy arrays so they can be loaded in native-camera-tools
     import numpy as np
@@ -204,7 +198,7 @@ def export_onnx(
         (kpts0_padded, kpts1_padded, desc0_padded, desc1_padded),
         lightglue_path,
         input_names=["kpts0", "kpts1", "desc0", "desc1"],
-        output_names=["matches0", "mscores0"],
+        output_names=["scores"],
         opset_version=11,
         # dynamic_axes={
         #     "kpts0": {1: "num_keypoints0"},
@@ -215,6 +209,40 @@ def export_onnx(
         #     "mscores0": {0: "num_matches0"},
         # },
     )
+
+    # Fix bug in Flatten node
+    def fix_flatten(model):
+        for node in model.graph.node:
+            if node.name == "/Flatten":
+                print(node.attribute)
+                node.attribute[0].i = 0
+                print(node.attribute)
+
+    print ("Fixing model..")
+    model = onnx.load(lightglue_path)
+    new_filename = lightglue_path.replace(".onnx", "_fixed.onnx")
+    fix_flatten(model)
+    onnx.save(model, new_filename)
+
+    # from lightglue_onnx.lightglue import TestModel
+    # from lightglue_onnx.lightglue import filter_matches
+
+    # model = TestModel()
+    # scores = torch.randn([1, 736, 858])
+    # torch.onnx.export(model, (scores), 'weights/filter_matches.onnx', 
+    #                 input_names=["scores"],
+    #                 output_names=["matches0", "mscores0"], 
+    #                 # dynamic_axes={
+    #                 #     "matches0": {0: "num_matches0"},
+    #                 #     "mscores0": {0: "num_matches0"},
+    #                 # },
+    #                 opset_version=11)
+
+    # print ("Fixing model..")
+    # model = onnx.load("weights/filter_matches.onnx")
+    # new_filename = "weights/filter_matches.onnx".replace(".onnx", "_fixed.onnx")
+    # fix_flatten(model)
+    # onnx.save(model, new_filename)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 import onnx
 from onnxsim import simplify
+import sys
 
-filename = "weights/test.onnx"
+filename = sys.argv[1]
 
 # load your predefined ONNX model
 model = onnx.load(filename)
@@ -12,4 +13,6 @@ model_simp, check = simplify(model)
 
 assert check, "Simplified ONNX model could not be validated"
 
-onnx.save(model_simp, "weights/test_simplified.onnx")
+new_filename = filename.replace(".onnx", "_simplified.onnx")
+print(f"New file name: {new_filename}")
+onnx.save(model_simp, new_filename)
