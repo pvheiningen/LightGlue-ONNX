@@ -171,10 +171,10 @@ def export_onnx(
 
     # Export as numpy arrays so they can be loaded in native-camera-tools
     import numpy as np
-    np.save('kpts0.npy', kpts0.detach().cpu().numpy())
-    np.save('desc0.npy', desc0.detach().cpu().numpy())
-    np.save('kpts1.npy', kpts1.detach().cpu().numpy())
-    np.save('desc1.npy', desc1.detach().cpu().numpy())
+    np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts0.npy', kpts0.detach().cpu().numpy())
+    np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/desc0.npy', desc0.detach().cpu().numpy())
+    np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts1.npy', kpts1.detach().cpu().numpy())
+    np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/desc1.npy', desc1.detach().cpu().numpy())
     print("saved")
 
     print(f"Found {kpts0.shape[1]} keypoints in image 0")
@@ -187,15 +187,15 @@ def export_onnx(
         return torch.cat((tensor[0], padding))[None]
 
     # Add padding to kpts0 to get total keypoints
-    print(max_num_keypoints)
-    kpts0_padded = pad(kpts0, max_num_keypoints)
-    kpts1_padded = pad(kpts1, max_num_keypoints)
-    desc0_padded = pad(desc0, max_num_keypoints)
-    desc1_padded = pad(desc1, max_num_keypoints)
+    # print(max_num_keypoints)
+    # kpts0 = pad(kpts0, max_num_keypoints)
+    # kpts1 = pad(kpts1, max_num_keypoints)
+    # desc0 = pad(desc0, max_num_keypoints)
+    # desc1 = pad(desc1, max_num_keypoints)
 
     torch.onnx.export(
         lightglue,
-        (kpts0_padded, kpts1_padded, desc0_padded, desc1_padded),
+        (kpts0, kpts1, desc0, desc1),
         lightglue_path,
         input_names=["kpts0", "kpts1", "desc0", "desc1"],
         output_names=["scores"],

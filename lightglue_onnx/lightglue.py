@@ -250,6 +250,25 @@ def filter_matches(scores: torch.Tensor, th: float):
 
     return matches, mscores
 
+
+def filter_matches_lightglue(scores: torch.Tensor, th: float):
+    """obtain matches from a log assignment matrix [Bx M+1 x N+1]"""
+    max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
+    m0, m1 = max0.indices, max1.indices
+    indices0 = torch.arange(m0.shape[1], device=m0.device)[None]
+    indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
+    mutual0 = indices0 == m1.gather(1, m0)
+    mutual1 = indices1 == m0.gather(1, m1)
+    max0_exp = max0.values.exp()
+    zero = max0_exp.new_tensor(0)
+    mscores0 = torch.where(mutual0, max0_exp, zero)
+    mscores1 = torch.where(mutual1, mscores0.gather(1, m1), zero)
+    valid0 = mutual0 & (mscores0 > th)
+    valid1 = mutual1 & valid0.gather(1, m1)
+    m0 = torch.where(valid0, m0, -1)
+    m1 = torch.where(valid1, m1, -1)
+    return m0, m1, mscores0, mscores1
+
 # Dim 0:
 # [[1, 2]
 #  [3, 4]]
@@ -417,7 +436,7 @@ class LightGlue(nn.Module):
         print("Filter threshold: ", self.conf.filter_threshold)
         
         matches, _ = filter_matches(scores, self.conf.filter_threshold)
-        print(matches)
+        print(f"Matches: {len(matches)} {matches}")
 
         # print(f"Detected {mscores.shape[0]} matching points")
 
