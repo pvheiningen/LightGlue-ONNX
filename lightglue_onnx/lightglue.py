@@ -221,11 +221,13 @@ def filter_matches(scores: torch.Tensor, th: float):
     # indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
     
     # print(f"max0: {max0}")
-    # print(f"m0: {m0}")
+    print(f"m0: {m0}")
     # print(f"indices0: {indices0}")
     # print(f"custom_gather(m1, m0): {custom_gather(m1, m0)}")
 
-    mutual0 = (indices0 == custom_gather(m1, m0)) # custom_gather(m1, 1, m0)
+
+
+    mutual0 = (indices0 == custom_gather(m1, m0)) # The indices where the maximum value is the best on the row and column
 
     # mutual1 = indices1 == m0.gather(1, m1)
     max0_exp = max0.values[:, :, 0].exp()

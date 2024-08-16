@@ -211,18 +211,18 @@ def export_onnx(
     )
 
     # Fix bug in Flatten node
-    def fix_flatten(model):
-        for node in model.graph.node:
-            if node.name == "/Flatten":
-                print(node.attribute)
-                node.attribute[0].i = 0
-                print(node.attribute)
+    # def fix_flatten(model):
+    #     for node in model.graph.node:
+    #         if node.name == "/Flatten":
+    #             print(node.attribute)
+    #             node.attribute[0].i = 0
+    #             print(node.attribute)
 
-    print ("Fixing model..")
-    model = onnx.load(lightglue_path)
-    new_filename = lightglue_path.replace(".onnx", "_fixed.onnx")
-    fix_flatten(model)
-    onnx.save(model, new_filename)
+    # print ("Fixing model..")
+    # model = onnx.load(lightglue_path)
+    # new_filename = lightglue_path.replace(".onnx", "_fixed.onnx")
+    # fix_flatten(model)
+    # onnx.save(model, new_filename)
 
     # from lightglue_onnx.lightglue import TestModel
     # from lightglue_onnx.lightglue import filter_matches
