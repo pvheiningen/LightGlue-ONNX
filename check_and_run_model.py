@@ -12,17 +12,17 @@ print("Checking model complete!")
 
 
 print("Running inference...")
-kpts0 = np.load("kpts0.npy")
-desc0 = np.load("desc0.npy")
+kpts0 = np.load("/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts0.npy")
+desc0 = np.load("/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/desc0.npy")
 
-kpts1 = np.load("kpts1.npy")
-desc1 = np.load("desc1.npy")
+kpts1 = np.load("/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts1.npy")
+desc1 = np.load("/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/desc1.npy")
 
-max_num_keypoints = 2048
-kpts0 = np.pad(kpts0, ((0, 0), (0, max_num_keypoints - kpts0.shape[1]), (0, 0)), mode='constant')
-kpts1 = np.pad(kpts1, ((0, 0), (0, max_num_keypoints - kpts1.shape[1]), (0, 0)), mode='constant')
-desc0 = np.pad(desc0, ((0, 0), (0, max_num_keypoints - desc0.shape[1]), (0, 0)), mode='constant')
-desc1 = np.pad(desc1, ((0, 0), (0, max_num_keypoints - desc1.shape[1]), (0, 0)), mode='constant')
+# max_num_keypoints = 2048
+# kpts0 = np.pad(kpts0, ((0, 0), (0, max_num_keypoints - kpts0.shape[1]), (0, 0)), mode='constant')
+# kpts1 = np.pad(kpts1, ((0, 0), (0, max_num_keypoints - kpts1.shape[1]), (0, 0)), mode='constant')
+# desc0 = np.pad(desc0, ((0, 0), (0, max_num_keypoints - desc0.shape[1]), (0, 0)), mode='constant')
+# desc1 = np.pad(desc1, ((0, 0), (0, max_num_keypoints - desc1.shape[1]), (0, 0)), mode='constant')
 
 ort_sess = ort.InferenceSession(sys.argv[1], providers=['CPUExecutionProvider'])
 scores = ort_sess.run(None, {'kpts0': kpts0, 'kpts1': kpts1, 'desc0': desc0, 'desc1': desc1})
