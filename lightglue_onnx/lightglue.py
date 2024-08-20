@@ -436,7 +436,7 @@ class LightGlue(nn.Module):
         print("Filter threshold: ", self.conf.filter_threshold)
         
         matches, _ = filter_matches(scores, self.conf.filter_threshold)
-        print(f"Matches: {len(matches)} {matches}")
+        print(f"Matches: {matches.shape[0]}")
 
         # print(f"Detected {mscores.shape[0]} matching points")
 

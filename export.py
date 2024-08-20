@@ -4,6 +4,8 @@ from typing import List
 import torch
 import onnx
 
+import numpy as np
+
 from lightglue_onnx import DISK, LightGlue, SIFT, LightGlueEnd2End, SuperPoint
 from lightglue_onnx.end2end import normalize_keypoints
 from lightglue_onnx.utils import load_image, rgb_to_grayscale
@@ -50,6 +52,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dynamic", action="store_true", help="Whether to allow dynamic image sizes."
     )
+    parser.add_argument(
+        "--img_path",
+        type=str,
+        default=None,
+        required=False,
+        help="Path to load images",
+    )
 
     # Extractor-specific args:
     parser.add_argument(
@@ -68,8 +77,7 @@ def export_onnx(
     extractor_type="superpoint",
     extractor_path=None,
     lightglue_path=None,
-    img0_path="/srv/calibrations/GlobalFootball2/01_11v11_soccer_amfb_green/image0-synchronized.jpg",
-    img1_path="/srv/calibrations/GlobalFootball2/01_11v11_soccer_amfb_green/image1-synchronized.jpg",
+    img_path="/srv/calibrations/GlobalFootball2/01_11v11_soccer_amfb_green/",
     end2end=False,
     dynamic=False,
     max_num_keypoints=None,
@@ -102,8 +110,8 @@ def export_onnx(
     image1_clip_coord = int(4104 * clip_percentage)
 
     # Image size: 410 x 3046
-    image0 = load_image(img0_path)[:, :, image0_clip_coord:]
-    image1 = load_image(img1_path)[:, :, :image1_clip_coord]
+    image0 = load_image(img_path + "/image0-synchronized.jpg")[:, :, image0_clip_coord:]
+    image1 = load_image(img_path + "/image1-synchronized.jpg")[:, :, :image1_clip_coord]
 
     # Models
     extractor_type = extractor_type.lower()
@@ -117,7 +125,7 @@ def export_onnx(
         extractor = DISK(max_num_keypoints=max_num_keypoints).eval()
         lightglue = LightGlue(extractor_type).eval()
     elif extractor_type == "sift":
-        extractor = SIFT(max_num_keypoints=2048).eval()
+        extractor = SIFT(max_num_keypoints=max_num_keypoints).eval()
         lightglue = LightGlue(extractor_type, filter_threshold=0.98, depth_confidence=-1, width_confidence=-1).eval()        
     else:
         raise NotImplementedError(
@@ -169,29 +177,43 @@ def export_onnx(
         [kpts1] + [feats1[k].unsqueeze(-1) for k in ("scales", "oris")], -1
     )
 
+    print(f"Found {kpts0.shape[1]} keypoints in image 0")
+    print(f"Found {kpts1.shape[1]} keypoints in image 1")
+
+    register_aten_sdpa()
+
+    def pad_kpts(tensor, target_size):
+        # x = torch.ones(target_size - tensor.shape[1], 1) * 0
+        # y = torch.ones(target_size - tensor.shape[1], 1) * 0
+
+        # padding = torch.cat(
+        #     [x] + [y] + [torch.zeros(target_size - tensor.shape[1], 2)], -1
+        # )
+
+        minimum = torch.min(tensor, dim=1).values
+        padding = minimum.repeat(target_size - tensor.shape[1], 1)
+        return torch.cat((tensor[0], padding))[None]
+
+    def pad_desc(tensor, target_size):
+        padding = torch.zeros(target_size - tensor.shape[1], tensor.shape[2])
+        return torch.cat((tensor[0], padding))[None]
+
+    # Add padding to kpts0 to get total keypoints
+    print(max_num_keypoints)
+    kpts0 = pad_kpts(kpts0, max_num_keypoints)
+    kpts1 = pad_kpts(kpts1, max_num_keypoints)
+    desc0 = pad_desc(desc0, max_num_keypoints)
+    desc1 = pad_desc(desc1, max_num_keypoints)
+
     # Export as numpy arrays so they can be loaded in native-camera-tools
-    import numpy as np
     np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts0.npy', kpts0.detach().cpu().numpy())
     np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/desc0.npy', desc0.detach().cpu().numpy())
     np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts1.npy', kpts1.detach().cpu().numpy())
     np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/desc1.npy', desc1.detach().cpu().numpy())
     print("saved")
 
-    print(f"Found {kpts0.shape[1]} keypoints in image 0")
-    print(f"Found {kpts1.shape[1]} keypoints in image 1")
-
-    register_aten_sdpa()
-
-    def pad(tensor, target_size):
-        padding = torch.zeros(target_size - tensor.shape[1], tensor.shape[2])
-        return torch.cat((tensor[0], padding))[None]
-
-    # Add padding to kpts0 to get total keypoints
-    # print(max_num_keypoints)
-    # kpts0 = pad(kpts0, max_num_keypoints)
-    # kpts1 = pad(kpts1, max_num_keypoints)
-    # desc0 = pad(desc0, max_num_keypoints)
-    # desc1 = pad(desc1, max_num_keypoints)
+    print(kpts0)
+    print(kpts1)
 
     torch.onnx.export(
         lightglue,
@@ -205,8 +227,8 @@ def export_onnx(
         #     "kpts1": {1: "num_keypoints1"},
         #     "desc0": {1: "num_keypoints0"},
         #     "desc1": {1: "num_keypoints1"},
-        #     "matches0": {0: "num_matches0"},
-        #     "mscores0": {0: "num_matches0"},
+        #     # "matches0": {0: "num_matches0"},
+        #     # "mscores0": {0: "num_matches0"},
         # },
     )
 

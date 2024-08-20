@@ -47,7 +47,10 @@ def normalize_keypoints(
     w: int,
 ) -> torch.Tensor:
     size = torch.tensor([w, h], dtype=torch.float32, device=kpts.device)
+    print(size)
     shift = size / 2
     scale = size.max() / 2
     kpts = (kpts - shift) / scale
     return kpts
+
+
