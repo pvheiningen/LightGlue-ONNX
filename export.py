@@ -183,15 +183,15 @@ def export_onnx(
     register_aten_sdpa()
 
     def pad_kpts(tensor, target_size):
-        # x = torch.ones(target_size - tensor.shape[1], 1) * 0
-        # y = torch.ones(target_size - tensor.shape[1], 1) * 0
+        x = torch.ones(target_size - tensor.shape[1], 1) * -1
+        y = torch.ones(target_size - tensor.shape[1], 1) * -1
 
-        # padding = torch.cat(
-        #     [x] + [y] + [torch.zeros(target_size - tensor.shape[1], 2)], -1
-        # )
+        padding = torch.cat(
+            [x] + [y] + [torch.zeros(target_size - tensor.shape[1], 2)], -1
+        )
 
-        minimum = torch.min(tensor, dim=1).values
-        padding = minimum.repeat(target_size - tensor.shape[1], 1)
+        # minimum = torch.min(tensor, dim=1).values
+        # padding = minimum.repeat(target_size - tensor.shape[1], 1)
         return torch.cat((tensor[0], padding))[None]
 
     def pad_desc(tensor, target_size):
