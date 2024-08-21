@@ -20,15 +20,15 @@ desc1 = np.load("/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/des
 
 
 ort_sess = ort.InferenceSession(sys.argv[1], providers=['CPUExecutionProvider'])
-scores = ort_sess.run(None, {'kpts0': kpts0, 'kpts1': kpts1, 'desc0': desc0, 'desc1': desc1})
+scores = ort_sess.run(None, {'kpts0': kpts0, 'kpts1': kpts1, 'desc0': desc0, 'desc1': desc1})[0]
 
 # Print Result
-print(scores[0])
-print(scores[0].shape)
-matches = np.argwhere(scores[0][0] > 0.98)
+print(scores)
+print(scores.shape)
+matches = np.argwhere(scores > 0.98)
 print(matches)
 
-print(f"Found {np.sum(scores[0] > 0.98)} matches")
+print(f"Found {np.sum(scores > 0.98)} matches")
 
 
 from lightglue import viz2d

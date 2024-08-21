@@ -199,11 +199,11 @@ def export_onnx(
         return torch.cat((tensor[0], padding))[None]
 
     # Add padding to kpts0 to get total keypoints
-    print(max_num_keypoints)
-    kpts0 = pad_kpts(kpts0, max_num_keypoints)
-    kpts1 = pad_kpts(kpts1, max_num_keypoints)
-    desc0 = pad_desc(desc0, max_num_keypoints)
-    desc1 = pad_desc(desc1, max_num_keypoints)
+    # print(max_num_keypoints)
+    # kpts0 = pad_kpts(kpts0, max_num_keypoints)
+    # kpts1 = pad_kpts(kpts1, max_num_keypoints)
+    # desc0 = pad_desc(desc0, max_num_keypoints)
+    # desc1 = pad_desc(desc1, max_num_keypoints)
 
     # Export as numpy arrays so they can be loaded in native-camera-tools
     np.save('/srv/calibrations/GlobalFootball/01_11v11_soccer_amfb_green/kpts0.npy', kpts0.detach().cpu().numpy())
@@ -222,14 +222,13 @@ def export_onnx(
         input_names=["kpts0", "kpts1", "desc0", "desc1"],
         output_names=["scores"],
         opset_version=11,
-        # dynamic_axes={
-        #     "kpts0": {1: "num_keypoints0"},
-        #     "kpts1": {1: "num_keypoints1"},
-        #     "desc0": {1: "num_keypoints0"},
-        #     "desc1": {1: "num_keypoints1"},
-        #     # "matches0": {0: "num_matches0"},
-        #     # "mscores0": {0: "num_matches0"},
-        # },
+        dynamic_axes={
+            "kpts0": {1: "num_keypoints0"},
+            "kpts1": {1: "num_keypoints1"},
+            "desc0": {1: "num_keypoints0"},
+            "desc1": {1: "num_keypoints1"},
+            #"scores": {0: "num_matches0", 1: "num_matches1"},
+        },
     )
 
     # Fix bug in Flatten node
