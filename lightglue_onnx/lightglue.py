@@ -438,15 +438,7 @@ class LightGlue(nn.Module):
         matches, _ = filter_matches(scores, self.conf.filter_threshold)
         print(f"Scores: {scores[0].exp().shape}")
 
-        # print(f"Detected {mscores.shape[0]} matching points")
         result = scores[0].exp()
-
-        print(f"Result shape: {result.shape}")
-        xpad = 2048 - result.shape[0]
-        ypad = 2048 - result.shape[1]
-        print(xpad, ypad)
-        result = torch.nn.functional.pad(result, (0, ypad, 0, xpad), value=0)
-        print(f"Result shape: {result.shape}")
 
         return result
         # Skip unnecessary computation
